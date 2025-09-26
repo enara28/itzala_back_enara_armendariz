@@ -118,81 +118,205 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from flask_jwt_extended import create_access_token
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
+from flask_cors import CORS
+from datetime import timedelta
 import os
 
 app = Flask(__name__)
+cors = CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.sqlite')
-app.config["JWT_SECRET_KEY"] = 'Wcw4xvlkDAYX-L5c'
+app.config["JWT_SECRET_KEY"] = 'NAwmqQlzss3OCieT_6-SulHpkRI'
 app.config['JWT_VERIFY_SUB'] = False
-app.config["JWT_TOKEN_LOCATION"] = ["headers", "cookies", "json", "query_string"]
+app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 jwt = JWTManager(app)
 
-class User(db.Model):
+# Gestión de usuarios
+class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=False)
+    usuario = db.Column(db.String(100), unique=False)
     email = db.Column(db.String(144), unique=True,)
-    password = db.Column(db.String(144), unique=False)
+    contraseña = db.Column(db.String(144), unique=False)
 
-    def __init__(self, username, email, password):
-        self.username = username
+    def __init__(self, usuario, email, contraseña):
+        self.usuario = usuario
         self.email = email
-        self.password = password
+        self.contraseña = contraseña
 
 
-class UserSchema(ma.Schema):
+class UsuarioSchema(ma.Schema):
     id = ma.Integer()
-    username = ma.String()
+    usuario = ma.String()
     email = ma.String()
-    password = ma.String()
+    # contraseña = ma.String()
 
 
-user_schema = UserSchema()
-users_schema = UserSchema(many=True)
+usuario_schema = UsuarioSchema()
+usuarios_schema = UsuarioSchema(many=True)
 
+# Gestión de administradores
+class Admin(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    usuario = db.Column(db.String(100), unique=False)
+    email = db.Column(db.String(144), unique=True,)
+    contraseña = db.Column(db.String(144), unique=False)
+
+    def __init__(self, usuario, email, contraseña):
+        self.usuario = usuario
+        self.email = email
+        self.contraseña = contraseña
+
+
+class AdminSchema(ma.Schema):
+    id = ma.Integer()
+    usuario = ma.String()
+    email = ma.Email()
+    contraseña = ma.String()
+
+
+admin_schema = AdminSchema()
+admins_schema = AdminSchema(many=True)
+
+# Gestión de reservas
+class Reserva(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    día = db.Column(db.String(10), unique=False, nullable=False)
+    cantidad = db.Column(db.Integer, unique=False, nullable=False)
+    comentario = db.Column(db.String(150), unique=False, nullable=True)
+    reserva_usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"))
+    usuario = db.relationship("Usuario", backref="reserva")
+
+    def __init__(self, día, cantidad, comentario):
+        self.día = día
+        self.cantidad = cantidad
+        self.comentario = comentario
+
+class ReservaSchema(ma.Schema):
+    id = ma.Integer()
+    día = ma.String()
+    cantidad = ma.Integer()
+    comentario = ma.String()
+
+reserva_schema = ReservaSchema()
+reservas_schema = ReservaSchema(many=True)
+
+# Gestión de productos
+class Producto(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    producto = db.Column(db.String(200), unique=True, nullable=False)
+    tiempo = db.Column(db.Integer, unique=False, nullable=False)
+    precio = db.Column(db.Float, unique=False, nullable=False)
+
+    def __init__(self, producto, tiempo, precio):
+        self.producto = producto
+        self.tiempo = tiempo
+        self.precio = precio
+
+class ProductoSchema(ma.Schema):
+    id = ma.Integer()
+    producto = ma.String()
+    tiempo = ma.Integer()
+    precio = ma.Float()
+
+producto_schema = ProductoSchema()
+productos_schema = ProductoSchema(many=True)
+
+#Gestión de pedidos
+class Pedido(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"))
+    usuario = db.relationship("Usuario", backref="pedido")
+    pedido_productos_id = db.Column(db.Integer, db.ForeignKey("producto.id"))
+    producto = db.relationship("Producto", backref="pedido")
+
+class PedidoSchema(ma.Schema):
+    id = ma.Integer()
+
+pedido_schema = PedidoSchema()
+pedidos_schema = PedidoSchema(many=True)
+
+# from app import app
+# from app import db
+# with app.app_context():
+#     db.create_all()
+
+# Welcome route
 @app.route("/")
 def greeting():
     return "Bienvenido al portal api de Itzala"
 
-
-# Endpoint to create a new guide
-@app.route('/user', methods=["POST"])
+# Endpoint to create a new user (comprovado, mirar gestión de errores al duplicar)
+@app.route('/usuario', methods=["POST"])
 def add_users():
-    username = request.json['username']
+    usuario = request.json['usuario']
     email = request.json['email']
-    password = request.json['password']
+    contraseña = request.json['contraseña']
 
-    new_user = User(username, email, password)
+    nuevo_usuario = Usuario(usuario, email, contraseña)
 
-    db.session.add(new_user)
+    db.session.add(nuevo_usuario)
     db.session.commit()
 
-    user = User.query.get(new_user.id)
+    usuario = db.session.get(Usuario, nuevo_usuario.id)
 
-    return user_schema.jsonify(user)
+    return usuario_schema.jsonify(usuario)
 
-# Endpoint to log in with an existing user
+# Endpoint to create a new admin (comprovado, mirar gestión de errores al duplicar)
+@app.route('/admin', methods=["POST"])
+def add_admin():
+    usuario = request.json['usuario']
+    email = request.json['email']
+    contraseña = request.json['contraseña']
+
+    nuevo_admin = Admin(usuario, email, contraseña)
+
+    db.session.add(nuevo_admin)
+    db.session.commit()
+
+    admin = db.session.get(Admin, nuevo_admin.id)
+
+    return admin_schema.jsonify(admin)
+ 
+# Endpoint to log in with an existing user (comprovado, revisar gesión de jwt)
 @app.route("/login", methods=["POST"])
 def login():
-    password = request.json.get("password")
+    contraseña = request.json.get("contraseña")
     email = request.json.get("email")
 
-    user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
+    usuario = db.session.execute(db.select(Usuario).filter_by(email=email)).scalar_one_or_none()
+    admin = db.session.execute(db.select(Admin).filter_by(email=email)).scalar_one_or_none()
 
 
-    if user and user.password == password and user.email == email:
-        access_token = create_access_token(identity={"email": email, "password": password})
-        return jsonify(access_token=access_token)
+    # if usuario and usuario.contraseña == contraseña and usuario.email == email:
+    #     access_token = create_access_token(identity={"email": email, "contraseña": contraseña})
+    #     return jsonify(access_token=access_token, status="usuario", usuario_id=usuario.id), 200
+    # elif admin and admin.contraseña == contraseña and admin.email == email:
+    #     access_token = create_access_token(identity={"email": email, "contraseña": contraseña})
+    #     return jsonify(access_token=access_token, status="admin"), 200
+    # else:
+    #     return jsonify({"msg": "Contraseña o email incorrecto"}), 401
+
+    if usuario and usuario.contraseña == contraseña and usuario.email == email:
+        access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": False})
+        response = jsonify(status="usuario", usuario_id=usuario.id)
+        response.set_cookie("access_token_cookie", access_token_cookie)
+        return response, 200
+    elif admin and admin.contraseña == contraseña and admin.email == email:
+        access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": True})
+        response = jsonify(status="admin")
+        response.set_cookie("access_token_cookie", access_token_cookie)
+        return response,  200
     else:
-        return jsonify({"msg": "Bad email or password"}), 401
+        return jsonify({"msg": "Contraseña o email incorrecto"}), 401
 
-    
+
 
 # ruta a la carpeta: "C:\Users\Enara\OneDrive\Escritorio\itzala_back\segunda_prueba_pipenv"
 
@@ -202,43 +326,110 @@ def login():
 #     current_user = get_jwt_identity()
 #     return jsonify(logged_in_as=current_user), 200
 
-# Endpoint to query all guides
-@app.route("/users", methods=["GET"])
+# Endpoint to query all users (guardado como referencia de uso jwt)
+
+
+# @jwt_required()
+# def idetify_user():
+#     current_user = get_jwt_identity()
+#     return jsonify(logged_in_as=current_user)
+
+# @app.route('/protected', methods=['GET'])
+# @jwt_required()
+# def protected():
+#     current_user = request.cookies.get("access_token_cookie")
+#     return jsonify(logged_in_as=current_user), 200
+
+@app.route("/usuarios", methods=["GET"])
 @jwt_required()
 def get_users():
-    current_user = get_jwt_identity()
-    all_users = User.query.all()
-    result = users_schema.dump(all_users)
-    return jsonify(result, current_user), 200, {'Access-Control-Allow-Origin':'*'}
+        is_admin = get_jwt()
+        if is_admin["isAdmin"] == True:
+            all_users = Usuario.query.all()
+            result = usuarios_schema.dump(all_users)
+            return jsonify(result=result), 200
+        else:
+            return "Not allowed"
 
-@app.route("/user/<id>", methods=["GET"])
+# Endpoint to query all users (comporvado)
+# @app.route("/usuarios", methods=["GET"])
+# def get_users():
+#     all_users = Usuario.query.all()
+#     result = usuarios_schema.dump(all_users)
+#     return jsonify(result), 200
+
+@app.route("/usuario/<id>", methods=["GET"])
+@jwt_required()
 def get_user(id):
-    user = User.query.get(id)
-    return user_schema.jsonify(user), 200, {'Access-Control-Allow-Origin':'*'}
+    usuario = db.session.get(Usuario, id)
+    return usuario_schema.jsonify(usuario), 200
 
-# Endpoint for updating a guide
-@app.route("/user/<id>", methods=["PUT"])
+# Endpoint for updating a user's profile (funciona, pero solo si están todos los campos)
+@app.route("/usuario/<id>", methods=["PUT"])
+@jwt_required()
 def user_update(id):
-    user = User.query.get(id)
-    username = request.json['username']
+    user = db.session.get(Usuario, id)
+    usuario = request.json['usuario']
     email = request.json['email']
-    password = request.json['password']
+    contraseña = request.json['contraseña']
 
-    user.username = username
+    user.usuario = usuario
     user.email = email
-    user.password = password
+    user.contraseña = contraseña
 
     db.session.commit()
-    return user_schema.jsonify(user)
+    return usuario_schema.jsonify(user), 200
 
-# Endpoint for deleting a record
-@app.route("/user/<id>", methods=["DELETE"])
+# Endpoint for deleting a user (funciona)
+@app.route("/usuario/<id>", methods=["DELETE"])
+@jwt_required()
 def user_delete(id):
-    user = User.query.get(id)
-    db.session.delete(user)
+    usuario = db.session.get(Usuario, id)
+    db.session.delete(usuario)
     db.session.commit()
 
-    return user_schema.jsonify(user)
+    return usuario_schema.jsonify(usuario)
+
+# Endpoint to add menu item (comporvado, funciona)
+@app.route("/menu-item", methods=["POST"])
+@jwt_required()
+def add_item():
+    producto = request.json["producto"]
+    tiempo = request.json["tiempo"]
+    precio = request.json["precio"]
+
+    nuevo_producto = Producto(producto, tiempo, precio)
+
+    db.session.add(nuevo_producto)
+    db.session.commit()
+
+    prod = db.session.get(Producto, nuevo_producto.id)
+
+    return producto_schema.jsonify(prod), 200
+
+@app.route("/menu-item", methods=["GET"])
+def show_item():
+    all_items = Producto.query.all()
+    result = productos_schema.dump(all_items)
+    return jsonify(result)
+
+# Endpoint to get a reservation (comporvado, funciona)
+@app.route("/reserva", methods=["POST"])
+@jwt_required()
+def reservar():
+    día = request.json["día"]
+    cantidad = request.json["cantidad"]
+    comentario = request.json["comentario"]
+
+    nueva_reserva = Reserva(día, cantidad, comentario)
+
+    db.session.add(nueva_reserva)
+    db.session.commit()
+
+    res = db.session.get(Reserva, nueva_reserva.id)
+
+    return reserva_schema.jsonify(res), 200
+
 
 if __name__ == '__main__':
     app.run(debug=True)
