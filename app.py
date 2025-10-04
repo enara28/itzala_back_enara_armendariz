@@ -117,8 +117,8 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-from flask_jwt_extended import create_access_token
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import create_access_token, set_access_cookies
+from flask_jwt_extended import get_jwt, get_jwt_identity, get_csrf_token
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
@@ -127,16 +127,20 @@ import os
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
-
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.sqlite')
 app.config["JWT_SECRET_KEY"] = 'NAwmqQlzss3OCieT_6-SulHpkRI'
 app.config['JWT_VERIFY_SUB'] = False
 app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours = 2)
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False
+# app.config["JWT_CSRF_IN_COOKIES"] = True
+# app.config["JWT_ACCESS_CSRF_COOKIE_NAME"] = "access_token_cookie"
+
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 jwt = JWTManager(app)
+
 
 # Gestión de usuarios
 class Usuario(db.Model):
@@ -231,13 +235,18 @@ productos_schema = ProductoSchema(many=True)
 #Gestión de pedidos
 class Pedido(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    pedido = db.Column(db.String(450), unique=False, nullable=False)
     pedido_usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"))
     usuario = db.relationship("Usuario", backref="pedido")
-    pedido_productos_id = db.Column(db.Integer, db.ForeignKey("producto.id"))
-    producto = db.relationship("Producto", backref="pedido")
+
+    def __init__(self, pedido, pedido_usuario_id):
+        self.pedido = pedido
+        self.pedido_usuario_id = pedido_usuario_id
 
 class PedidoSchema(ma.Schema):
     id = ma.Integer()
+    pedido = ma.String()
+    pedido_usuario_id = ma.Integer()
 
 pedido_schema = PedidoSchema()
 pedidos_schema = PedidoSchema(many=True)
@@ -305,40 +314,57 @@ def login():
 
     if usuario and usuario.contraseña == contraseña and usuario.email == email:
         access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": False})
-        response = jsonify(status="usuario", usuario_id=usuario.id)
-        response.set_cookie("access_token_cookie", access_token_cookie)
+        response = jsonify(logged_in="LOGGED_IN", status="usuario", usuario_id=usuario.id)
+        response.set_cookie("access_token_cookie", access_token_cookie, max_age=7200)
         return response, 200
     elif admin and admin.contraseña == contraseña and admin.email == email:
         access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": True})
-        response = jsonify(status="admin")
-        response.set_cookie("access_token_cookie", access_token_cookie)
+        response = jsonify(logged_in="LOGGED_IN", status="admin")
+        response.set_cookie("access_token_cookie", access_token_cookie, max_age=7200)
         return response,  200
     else:
         return jsonify({"msg": "Contraseña o email incorrecto"}), 401
 
+    # if usuario and usuario.contraseña == contraseña and usuario.email == email:
+    #     access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": False})
+    #     response = jsonify(logged_in="LOGGED_IN", status="usuario", usuario_id=usuario.id)
+    #     set_access_cookies(response, access_token_cookie)
+    #     return response, 200
+    # elif admin and admin.contraseña == contraseña and admin.email == email:
+    #     access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": True})
+    #     response = jsonify(logged_in="LOGGED_IN", status="admin")
+    #     set_access_cookies(response, access_token_cookie)
+    #     return response,  200
+    # else:
+    #     return jsonify({"msg": "Contraseña o email incorrecto"}), 401
 
 
-# ruta a la carpeta: "C:\Users\Enara\OneDrive\Escritorio\itzala_back\segunda_prueba_pipenv"
 
-# @app.route("/protected", methods=["GET"])
+# @app.route("/verify", methods=["GET"])
 # @jwt_required()
-# def protected():
-#     current_user = get_jwt_identity()
-#     return jsonify(logged_in_as=current_user), 200
+# def verify_user():
+#     identity = get_jwt()
+#     if identity["isAdmin"] == True:
+#         return jsonify(status="admin")
+#     elif identity["isAdmin"] == False:
+#         return jsonify(status="usuario")
 
-# Endpoint to query all users (guardado como referencia de uso jwt)
-
-
-# @jwt_required()
-# def idetify_user():
-#     current_user = get_jwt_identity()
-#     return jsonify(logged_in_as=current_user)
-
-# @app.route('/protected', methods=['GET'])
-# @jwt_required()
-# def protected():
-#     current_user = request.cookies.get("access_token_cookie")
-#     return jsonify(logged_in_as=current_user), 200
+@app.route("/verify", methods=["GET"])
+@jwt_required(optional=True)
+def verify_user():
+    identity = get_jwt_identity()
+    if identity:
+        email = identity["email"]
+        usuario = db.session.execute(db.select(Usuario).filter_by(email=email)).scalar_one_or_none()
+        isAdmin = get_jwt()["isAdmin"]
+        if isAdmin == True:
+            return jsonify(status="admin", logged_in="LOGGED_IN")
+        elif isAdmin == False:
+            return jsonify(status="usuario", usuario_id=usuario.id, logged_in="LOGGED_IN")
+        else:
+            return jsonify(logged_in="NO_LOGGED_IN")
+    else:
+        return jsonify(logged_in="NO_LOGGED_IN")
 
 @app.route("/usuarios", methods=["GET"])
 @jwt_required()
@@ -349,20 +375,17 @@ def get_users():
             result = usuarios_schema.dump(all_users)
             return jsonify(result=result), 200
         else:
-            return "Not allowed"
-
-# Endpoint to query all users (comporvado)
-# @app.route("/usuarios", methods=["GET"])
-# def get_users():
-#     all_users = Usuario.query.all()
-#     result = usuarios_schema.dump(all_users)
-#     return jsonify(result), 200
+            return "Not admin"
 
 @app.route("/usuario/<id>", methods=["GET"])
 @jwt_required()
 def get_user(id):
-    usuario = db.session.get(Usuario, id)
-    return usuario_schema.jsonify(usuario), 200
+    is_admin = get_jwt()
+    if is_admin["isAdmin"] == False:
+        usuario = db.session.get(Usuario, id)
+        return usuario_schema.jsonify(usuario), 200
+    else:
+        return "Not a logged in user"
 
 # Endpoint for updating a user's profile (funciona, pero solo si están todos los campos)
 @app.route("/usuario/<id>", methods=["PUT"])
@@ -413,7 +436,52 @@ def show_item():
     result = productos_schema.dump(all_items)
     return jsonify(result)
 
-# Endpoint to get a reservation (comporvado, funciona)
+@app.route("/menu-item/<id>", methods=["GET"])
+@jwt_required()
+def get_menu_item(id):
+    is_admin = get_jwt()
+    if is_admin["isAdmin"]:
+        menu_item = db.session.get(Producto, id)
+        return producto_schema.jsonify(menu_item), 200
+    else:
+        return "Not a logged in user"
+
+# Da problema de unauthorised 401
+
+@app.route("/menu-item/<id>", methods=["DELETE"])
+@jwt_required()
+def producto_delete(id):
+    # current_user = get_jwt_identity()
+    # access_token = create_access_token(identity=current_user)
+    is_admin = get_jwt()
+    if is_admin["isAdmin"] == True:
+        producto = db.session.get(Producto, id)
+        db.session.delete(producto)
+        db.session.commit()
+        response = producto_schema.jsonify(producto)
+        # set_access_cookies(response, access_token)
+        return response, 200
+    else:
+        return "You are not an admin"
+
+    
+@app.route("/menu-item/<id>", methods=["PUT"])
+@jwt_required()
+def item_update(id):
+    item = db.session.get(Producto, id)
+    producto = request.json['producto']
+    precio = request.json['precio']
+    tiempo = request.json['tiempo']
+
+    item.producto = producto
+    item.precio = precio
+    item.tiempo = tiempo
+
+    db.session.commit()
+    return usuario_schema.jsonify(item), 200
+
+
+# Endpoint to get a reservation (comprovado, funciona)
 @app.route("/reserva", methods=["POST"])
 @jwt_required()
 def reservar():
@@ -430,6 +498,27 @@ def reservar():
 
     return reserva_schema.jsonify(res), 200
 
+@app.route("/pedido", methods=["POST"])
+def nuevo_pedido():
+    pedido = request.json["pedido"]
+    usuario = request.json["usuario"]
+
+    nuevo_pedido = Pedido(pedido, usuario)
+
+    db.session.add(nuevo_pedido)
+    db.session.commit()
+
+    res = db.session.get(Pedido, nuevo_pedido.id)
+
+    return pedido_schema.jsonify(res), 200
+
+@app.route("/pedido/<id>", methods=["GET"])
+def get_pedidos(id):
+    users_pedidos = Pedido.query.filter_by(pedido_usuario_id=id)
+    result = pedidos_schema.dump(users_pedidos)
+    return jsonify(result), 200
+
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
