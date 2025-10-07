@@ -1,123 +1,7 @@
-# from flask import Flask, jsonify, request
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_marshmallow import Marshmallow
-# from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
-# import os
-
-# app = Flask(__name__)
-
-# basedir = os.path.abspath(os.path.dirname(__file__))
-# app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(basedir, "app.sqlite")
-# db = SQLAlchemy(app)
-# ma = Marshmallow(app)
-# # app.config["JWT_SECRET_KEY"] = 'Wcw4xvlkDAYX-L5c' #cambia esto
-# # jwt = JWTManager(app)
-
-# class User(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     username = db.Column(db.String, unique=False)
-#     email = db.Column(db.String, unique=True)
-#     password = db.Column(db.String, unique=False)
-#     def __init__(self, username, email, password):
-#         self.username = username
-#         self.email = email
-#         self.password = password
-# class UserSchema(ma.Schema):
-#      username = ma.String()
-#      email = ma.String()
-#      password = ma.String()
-
-# # class Admin(db.Model):
-# #     id = db.Column(db.Integer, primary_key=True)
-# #     username = db.Column(db.String, unique=False)
-# #     email = db.Column(db.String, unique=True)
-# #     password = db.Column(db.String, unique=False)
-
-# #     def __init__(self, username, email, password):
-# #         self.username = username
-# #         self.email = email
-# #         self.password = password
-
-# # class AdminSchema(ma.Schema):
-# #     username = ma.String()
-# #     email = ma.String()
-# #     password = ma.String()
-
-
-# user_schema = UserSchema()
-# # users_schema= UserSchema(many=True)
-# # admin_schema = AdminSchema()
-# # admins_schema= AdminSchema(many=True)
-
-# @app.route("/")
-# def greeting():
-#     return "Hello Itzala"
-
-# # @app.route("/profile", methods=["GET"])
-# # def getProfile():
-# #     username = request.json.get(user_schema.username)
-# #     return username
-# users = [
-#     {
-#         "id": 1,
-#         "username": "test",
-#         "email": "test@test.eus"
-#     },
-#     {
-#         "id": 2,
-#         "username": "test-dos",
-#         "email": "testdos@test.eus"
-#     },
-#     {
-#         "id": 3,
-#         "username": "test-tres",
-#         "email": "testtres@test.eus"
-#     }
-# ]
-
-# @app.route("/profile", methods=["POST", "GET"])
-# def get_profiles():
-#     user = User.query.get(User.username)
-#     return user_schema.jsonify(user)
-
-# # @app.route("/profile", methods=["POST"])
-# # def createProfile():
-# #     username = request.json(["username"])
-# #     email = request.json(["email"])
-# #     password = request.json(["password"])
-
-# #     new_user = User(username, email, password)
-
-# #     db.session.add(new_user)
-# #     db.session.commit()
-
-# #     user = User.query.get(new_user.id)
-# #     return user_schema.jsonify(user)
-
-# # @app.route("/login", methods=["POST"])
-# # def login():
-# #     username= request.json.get(admin_schema.username or user_schema.username, None)
-# #     password= request.json.get(admin_schema.password or user_schema.password, None)
-# #     if username != "test" or password != "test":
-# #         return jsonify({"msg": "Bad username or password"}), 401
-
-# #     access_token = create_access_token(identity=username)
-# #     return jsonify(access_token=access_token)
-
-# # @app.route("/protected", methods=["GET"])
-# # @jwt_required()
-# # def protected():
-# #     current_user = get_jwt_identity()
-# #     return jsonify(logged_in_as=current_user), 200
-
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
-
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-from flask_jwt_extended import create_access_token, set_access_cookies
+from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
 from flask_jwt_extended import get_jwt, get_jwt_identity, get_csrf_token
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
@@ -295,22 +179,13 @@ def add_admin():
  
 # Endpoint to log in with an existing user (comprovado, revisar gesión de jwt)
 @app.route("/login", methods=["POST"])
+@jwt_required(optional=True)
 def login():
     contraseña = request.json.get("contraseña")
     email = request.json.get("email")
 
     usuario = db.session.execute(db.select(Usuario).filter_by(email=email)).scalar_one_or_none()
     admin = db.session.execute(db.select(Admin).filter_by(email=email)).scalar_one_or_none()
-
-
-    # if usuario and usuario.contraseña == contraseña and usuario.email == email:
-    #     access_token = create_access_token(identity={"email": email, "contraseña": contraseña})
-    #     return jsonify(access_token=access_token, status="usuario", usuario_id=usuario.id), 200
-    # elif admin and admin.contraseña == contraseña and admin.email == email:
-    #     access_token = create_access_token(identity={"email": email, "contraseña": contraseña})
-    #     return jsonify(access_token=access_token, status="admin"), 200
-    # else:
-    #     return jsonify({"msg": "Contraseña o email incorrecto"}), 401
 
     if usuario and usuario.contraseña == contraseña and usuario.email == email:
         access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": False})
@@ -325,29 +200,13 @@ def login():
     else:
         return jsonify({"msg": "Contraseña o email incorrecto"}), 401
 
-    # if usuario and usuario.contraseña == contraseña and usuario.email == email:
-    #     access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": False})
-    #     response = jsonify(logged_in="LOGGED_IN", status="usuario", usuario_id=usuario.id)
-    #     set_access_cookies(response, access_token_cookie)
-    #     return response, 200
-    # elif admin and admin.contraseña == contraseña and admin.email == email:
-    #     access_token_cookie = create_access_token(identity={"email": email, "contraseña": contraseña}, additional_claims={"isAdmin": True})
-    #     response = jsonify(logged_in="LOGGED_IN", status="admin")
-    #     set_access_cookies(response, access_token_cookie)
-    #     return response,  200
-    # else:
-    #     return jsonify({"msg": "Contraseña o email incorrecto"}), 401
+@app.route("/logout", methods=["POST"])
+@jwt_required()
+def logout() :
+    resp = jsonify(logged_in="NO_LOGGED_IN")
+    unset_jwt_cookies(resp)
+    return resp, 200
 
-
-
-# @app.route("/verify", methods=["GET"])
-# @jwt_required()
-# def verify_user():
-#     identity = get_jwt()
-#     if identity["isAdmin"] == True:
-#         return jsonify(status="admin")
-#     elif identity["isAdmin"] == False:
-#         return jsonify(status="usuario")
 
 @app.route("/verify", methods=["GET"])
 @jwt_required(optional=True)
@@ -465,20 +324,22 @@ def producto_delete(id):
         return "You are not an admin"
 
     
-@app.route("/menu-item/<id>", methods=["PUT"])
+@app.route("/menu-item/<id>", methods=["PATCH"])
 @jwt_required()
 def item_update(id):
-    item = db.session.get(Producto, id)
-    producto = request.json['producto']
-    precio = request.json['precio']
-    tiempo = request.json['tiempo']
+    is_admin = get_jwt()
+    if is_admin["isAdmin"] == True:
+        item = db.session.get(Producto, id)
+        producto = request.json['producto']
+        precio = request.json['precio']
+        tiempo = request.json['tiempo']
 
     item.producto = producto
     item.precio = precio
     item.tiempo = tiempo
 
     db.session.commit()
-    return usuario_schema.jsonify(item), 200
+    return producto_schema.jsonify(item), 200
 
 
 # Endpoint to get a reservation (comprovado, funciona)
