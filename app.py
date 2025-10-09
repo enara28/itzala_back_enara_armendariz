@@ -81,13 +81,15 @@ class Reserva(db.Model):
     reserva_usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"))
     usuario = db.relationship("Usuario", backref="reserva")
 
-    def __init__(self, día, cantidad, comentario):
+    def __init__(self, día, cantidad, comentario, reserva_usuario_id):
         self.día = día
         self.cantidad = cantidad
         self.comentario = comentario
+        self.reserva_usuario_id = reserva_usuario_id
 
 class ReservaSchema(ma.Schema):
     id = ma.Integer()
+    reserva_usuario_id = ma.Integer()
     día = ma.String()
     cantidad = ma.Integer()
     comentario = ma.String()
@@ -95,7 +97,7 @@ class ReservaSchema(ma.Schema):
 reserva_schema = ReservaSchema()
 reservas_schema = ReservaSchema(many=True)
 
-# Gestión de productos
+# Gestión de productos (platos de la carta)
 class Producto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     producto = db.Column(db.String(200), unique=True, nullable=False)
@@ -135,17 +137,14 @@ class PedidoSchema(ma.Schema):
 pedido_schema = PedidoSchema()
 pedidos_schema = PedidoSchema(many=True)
 
-# from app import app
-# from app import db
-# with app.app_context():
-#     db.create_all()
+#Endpoints:
 
-# Welcome route
+# Inicio
 @app.route("/")
 def greeting():
     return "Bienvenido al portal api de Itzala"
 
-# Endpoint to create a new user (comprovado, mirar gestión de errores al duplicar)
+# Endpoint para crear un nuevo usuario
 @app.route('/usuario', methods=["POST"])
 def add_users():
     usuario = request.json['usuario']
@@ -161,7 +160,7 @@ def add_users():
 
     return usuario_schema.jsonify(usuario)
 
-# Endpoint to create a new admin (comprovado, mirar gestión de errores al duplicar)
+# Endpoint para crear una cuenta de administrador (no accesible en el frontend)
 @app.route('/admin', methods=["POST"])
 def add_admin():
     usuario = request.json['usuario']
@@ -177,7 +176,7 @@ def add_admin():
 
     return admin_schema.jsonify(admin)
  
-# Endpoint to log in with an existing user (comprovado, revisar gesión de jwt)
+# Endpoint para iniciar sesión como usuario o como administrador
 @app.route("/login", methods=["POST"])
 @jwt_required(optional=True)
 def login():
@@ -200,6 +199,7 @@ def login():
     else:
         return jsonify({"msg": "Contraseña o email incorrecto"}), 401
 
+# Endpoint para cerrar sesión
 @app.route("/logout", methods=["POST"])
 @jwt_required()
 def logout() :
@@ -207,7 +207,7 @@ def logout() :
     unset_jwt_cookies(resp)
     return resp, 200
 
-
+# Endpoint para verificar que existe una sesión e identificar a quién pertenece
 @app.route("/verify", methods=["GET"])
 @jwt_required(optional=True)
 def verify_user():
@@ -225,6 +225,7 @@ def verify_user():
     else:
         return jsonify(logged_in="NO_LOGGED_IN")
 
+# Endpoint para obtener todos los usuarios (solo para administrador)
 @app.route("/usuarios", methods=["GET"])
 @jwt_required()
 def get_users():
@@ -236,6 +237,7 @@ def get_users():
         else:
             return "Not admin"
 
+# Endpoint para obtener un usuario concreto (para perfil de usuario)
 @app.route("/usuario/<id>", methods=["GET"])
 @jwt_required()
 def get_user(id):
@@ -246,7 +248,7 @@ def get_user(id):
     else:
         return "Not a logged in user"
 
-# Endpoint for updating a user's profile (funciona, pero solo si están todos los campos)
+# Endpoint para actualizar los datos de un usuario (en desuso, para futuros cambios)
 @app.route("/usuario/<id>", methods=["PUT"])
 @jwt_required()
 def user_update(id):
@@ -262,7 +264,7 @@ def user_update(id):
     db.session.commit()
     return usuario_schema.jsonify(user), 200
 
-# Endpoint for deleting a user (funciona)
+# Endpoint para eliminar un usuario (en desuso, para futuros cambios)
 @app.route("/usuario/<id>", methods=["DELETE"])
 @jwt_required()
 def user_delete(id):
@@ -272,7 +274,7 @@ def user_delete(id):
 
     return usuario_schema.jsonify(usuario)
 
-# Endpoint to add menu item (comporvado, funciona)
+# Endpoint para eliminar un plato del menú
 @app.route("/menu-item", methods=["POST"])
 @jwt_required()
 def add_item():
@@ -289,12 +291,14 @@ def add_item():
 
     return producto_schema.jsonify(prod), 200
 
+# Endpoint para obtener todos los platos del menú
 @app.route("/menu-item", methods=["GET"])
 def show_item():
     all_items = Producto.query.all()
     result = productos_schema.dump(all_items)
     return jsonify(result)
 
+# Endpoint para obtener un plato específico del menú
 @app.route("/menu-item/<id>", methods=["GET"])
 @jwt_required()
 def get_menu_item(id):
@@ -305,25 +309,21 @@ def get_menu_item(id):
     else:
         return "Not a logged in user"
 
-# Da problema de unauthorised 401
-
+# Endpoint para eliminar un plato del menú
 @app.route("/menu-item/<id>", methods=["DELETE"])
 @jwt_required()
 def producto_delete(id):
-    # current_user = get_jwt_identity()
-    # access_token = create_access_token(identity=current_user)
     is_admin = get_jwt()
     if is_admin["isAdmin"] == True:
         producto = db.session.get(Producto, id)
         db.session.delete(producto)
         db.session.commit()
         response = producto_schema.jsonify(producto)
-        # set_access_cookies(response, access_token)
         return response, 200
     else:
         return "You are not an admin"
 
-    
+# Endpoint para actualizar un plato del menú    
 @app.route("/menu-item/<id>", methods=["PATCH"])
 @jwt_required()
 def item_update(id):
@@ -341,16 +341,30 @@ def item_update(id):
     db.session.commit()
     return producto_schema.jsonify(item), 200
 
+# Endpoint para obtener todas las reservas
+@app.route("/reservation", methods=["GET"])
+def get_reservations():
+    all_items = Reserva.query.all()
+    result = reservas_schema.dump(all_items)
+    return jsonify(result)
 
-# Endpoint to get a reservation (comprovado, funciona)
+# Endpoint para obtener las reservas de un usuario
+@app.route("/reservation/<id>", methods=["GET"])
+def get_reservation(id):
+    users_reservations = Reserva.query.filter_by(reserva_usuario_id=id)
+    result = reservas_schema.dump(users_reservations)
+    return jsonify(result), 200
+
+# Endpoint para realizar una reserva
 @app.route("/reserva", methods=["POST"])
 @jwt_required()
 def reservar():
     día = request.json["día"]
     cantidad = request.json["cantidad"]
     comentario = request.json["comentario"]
+    usuario = request.json["usuario"]
 
-    nueva_reserva = Reserva(día, cantidad, comentario)
+    nueva_reserva = Reserva(día, cantidad, comentario, usuario)
 
     db.session.add(nueva_reserva)
     db.session.commit()
@@ -359,6 +373,7 @@ def reservar():
 
     return reserva_schema.jsonify(res), 200
 
+# Endpoint para realizar un pedido
 @app.route("/pedido", methods=["POST"])
 def nuevo_pedido():
     pedido = request.json["pedido"]
@@ -373,6 +388,7 @@ def nuevo_pedido():
 
     return pedido_schema.jsonify(res), 200
 
+# Endpoint para obtener los pedidos de un usuario
 @app.route("/pedido/<id>", methods=["GET"])
 def get_pedidos(id):
     users_pedidos = Pedido.query.filter_by(pedido_usuario_id=id)
