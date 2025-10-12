@@ -145,20 +145,20 @@ def greeting():
     return "Bienvenido al portal api de Itzala"
 
 # Endpoint para crear un nuevo usuario
-@app.route('/usuario', methods=["POST"])
+@app.route('/user', methods=["POST"])
 def add_users():
-    usuario = request.json['usuario']
+    user = request.json['user']
     email = request.json['email']
-    contraseña = request.json['contraseña']
+    password = request.json['password']
 
-    nuevo_usuario = Usuario(usuario, email, contraseña)
+    new_user = Usuario(user, email, password)
 
-    db.session.add(nuevo_usuario)
+    db.session.add(new_user)
     db.session.commit()
 
-    usuario = db.session.get(Usuario, nuevo_usuario.id)
+    user = db.session.get(Usuario, new_user.id)
 
-    return usuario_schema.jsonify(usuario)
+    return usuario_schema.jsonify(user)
 
 # Endpoint para crear una cuenta de administrador (no accesible en el frontend)
 @app.route('/admin', methods=["POST"])
@@ -180,7 +180,7 @@ def add_admin():
 @app.route("/login", methods=["POST"])
 @jwt_required(optional=True)
 def login():
-    contraseña = request.json.get("contraseña")
+    contraseña = request.json.get("password")
     email = request.json.get("email")
 
     usuario = db.session.execute(db.select(Usuario).filter_by(email=email)).scalar_one_or_none()
@@ -359,12 +359,12 @@ def get_reservation(id):
 @app.route("/reserva", methods=["POST"])
 @jwt_required()
 def reservar():
-    día = request.json["día"]
+    day = request.json["day"]
     cantidad = request.json["cantidad"]
     comentario = request.json["comentario"]
-    usuario = request.json["usuario"]
+    user = request.json["user"]
 
-    nueva_reserva = Reserva(día, cantidad, comentario, usuario)
+    nueva_reserva = Reserva(day, cantidad, comentario, user)
 
     db.session.add(nueva_reserva)
     db.session.commit()
@@ -374,17 +374,17 @@ def reservar():
     return reserva_schema.jsonify(res), 200
 
 # Endpoint para realizar un pedido
-@app.route("/pedido", methods=["POST"])
-def nuevo_pedido():
-    pedido = request.json["pedido"]
-    usuario = request.json["usuario"]
+@app.route("/order", methods=["POST"])
+def make_order():
+    order = request.json["order"]
+    user = request.json["user"]
 
-    nuevo_pedido = Pedido(pedido, usuario)
+    new_order = Pedido(order, user)
 
-    db.session.add(nuevo_pedido)
+    db.session.add(new_order)
     db.session.commit()
 
-    res = db.session.get(Pedido, nuevo_pedido.id)
+    res = db.session.get(Pedido, new_order.id)
 
     return pedido_schema.jsonify(res), 200
 
