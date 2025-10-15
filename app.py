@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
-from flask_jwt_extended import get_jwt, get_jwt_identity, get_csrf_token
+from flask_jwt_extended import create_access_token, unset_jwt_cookies
+from flask_jwt_extended import get_jwt, get_jwt_identity
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
@@ -18,8 +18,7 @@ app.config['JWT_VERIFY_SUB'] = False
 app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours = 2)
 app.config["JWT_COOKIE_CSRF_PROTECT"] = False
-# app.config["JWT_CSRF_IN_COOKIES"] = True
-# app.config["JWT_ACCESS_CSRF_COOKIE_NAME"] = "access_token_cookie"
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
@@ -198,12 +197,12 @@ def login():
     if user and user.password == password and user.email == email:
         access_token_cookie = create_access_token(identity={"email": email, "password": password}, additional_claims={"isAdmin": False})
         response = jsonify(logged_in="LOGGED_IN", status="user", user_id=user.id)
-        response.set_cookie("access_token_cookie", access_token_cookie, max_age=7200)
+        response.set_cookie("access_token_cookie", access_token_cookie, max_age=7200, samesite='None', secure=True)
         return response, 200
     elif admin and admin.password == password and admin.email == email:
         access_token_cookie = create_access_token(identity={"email": email, "password": password}, additional_claims={"isAdmin": True})
         response = jsonify(logged_in="LOGGED_IN", status="admin")
-        response.set_cookie("access_token_cookie", access_token_cookie, max_age=7200)
+        response.set_cookie("access_token_cookie", access_token_cookie, max_age=7200, samesite='None', secure=True)
         return response,  200
     else:
         return jsonify({"msg": "Contraseña o email incorrecto"}), 401
@@ -418,5 +417,3 @@ def get_orders(id):
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-# Para generar secret key en python rapl: 1. import os, os.urandom(12) 2. import secrets, secrets.token_urlsafe(12)
