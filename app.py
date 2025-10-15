@@ -29,9 +29,9 @@ jwt = JWTManager(app)
 # Gestión de usuarios
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.String(100), unique=False)
-    email = db.Column(db.String(144), unique=True,)
-    password = db.Column(db.String(144), unique=False)
+    user = db.Column(db.String(100), unique=False, nullable=False)
+    email = db.Column(db.String(144), unique=True, nullable=False)
+    password = db.Column(db.String(144), unique=False, nullable=False)
 
     def __init__(self, user, email, password):
         self.user = user
@@ -51,9 +51,9 @@ users_schema = UserSchema(many=True)
 # Gestión de administradores
 class Admin(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.String(100), unique=False)
-    email = db.Column(db.String(144), unique=True,)
-    password = db.Column(db.String(144), unique=False)
+    user = db.Column(db.String(100), unique=False, nullable=False)
+    email = db.Column(db.String(144), unique=True, nullable=False)
+    password = db.Column(db.String(144), unique=False, nullable=False)
 
     def __init__(self, user, email, password):
         self.user = user
@@ -150,6 +150,13 @@ def add_users():
     email = request.json['email']
     password = request.json['password']
 
+    if user == None or email == None or password == None:
+        return jsonify({"msg": "Datos incorrectos"}), 400
+    
+    user_exist = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
+    if user_exist:
+        return jsonify({"msg": "Este email ya tiene una cuenta"}), 400
+
     new_user = User(user, email, password)
 
     db.session.add(new_user)
@@ -157,7 +164,7 @@ def add_users():
 
     user = db.session.get(User, new_user.id)
 
-    return user_schema.jsonify(user)
+    return user_schema.jsonify(user), 200
 
 # Endpoint para crear una cuenta de administrador (no accesible en el frontend)
 @app.route('/admin', methods=["POST"])
@@ -165,6 +172,9 @@ def add_admin():
     user = request.json['user']
     email = request.json['email']
     password = request.json['password']
+
+    if user == None or email == None or password == None:
+        return jsonify({"msg": "Datos incorrectos"}), 400
 
     new_admin = Admin(user, email, password)
 
@@ -362,6 +372,8 @@ def reserve():
     quantity = request.json["quantity"]
     comment = request.json["comment"]
     user = request.json["user"]
+    if day == None or quantity == None:
+        return jsonify({"msg": "Datos incorrectos"}), 400   
 
     new_reservation = Reservation(day, quantity, comment, user)
 
@@ -386,6 +398,14 @@ def make_order():
     res = db.session.get(Order, new_order.id)
 
     return order_schema.jsonify(res), 200
+
+# Endpoint para obtener todos los pedidos
+@app.route("/orders", methods=["GET"])
+def get_all_orders():
+    all_items = Order.query.all()
+    result = orders_schema.dump(all_items)
+    return jsonify(result), 200
+
 
 # Endpoint para obtener los pedidos de un usuario
 @app.route("/order/<id>", methods=["GET"])
