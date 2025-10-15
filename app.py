@@ -212,7 +212,7 @@ def login():
 @jwt_required()
 def logout() :
     resp = jsonify(logged_in="NO_LOGGED_IN")
-    unset_jwt_cookies(resp)
+    resp.delete_cookie("access_token_cookie", samesite='None', secure=True)
     return resp, 200
 
 # Endpoint para verificar que existe una sesión e identificar a quién pertenece
