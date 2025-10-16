@@ -10,7 +10,7 @@ from datetime import timedelta
 import os
 
 app = Flask(__name__)
-cors = CORS(app, resources={r"/*": {"origins": "https://itzala-front-enara-armendariz.onrender.com/"}}, supports_credentials=True)
+cors = CORS(app, resources={r"/*": {"origins": "https://itzala-front-enara-armendariz.onrender.com"}}, supports_credentials=True)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.sqlite')
 app.config["JWT_SECRET_KEY"] = 'NAwmqQlzss3OCieT_6-SulHpkRI'
