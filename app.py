@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-from flask_jwt_extended import create_access_token, unset_jwt_cookies
+from flask_jwt_extended import create_access_token
 from flask_jwt_extended import get_jwt, get_jwt_identity
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
@@ -351,6 +351,7 @@ def item_update(id):
 
 # Endpoint para obtener todas las reservas
 @app.route("/reservation", methods=["GET"])
+@jwt_required()
 def get_reservations():
     all_items = Reservation.query.all()
     result = reservations_schema.dump(all_items)
@@ -358,6 +359,7 @@ def get_reservations():
 
 # Endpoint para obtener las reservas de un usuario
 @app.route("/reservation/<id>", methods=["GET"])
+@jwt_required()
 def get_users_reservations(id):
     users_reservations = Reservation.query.filter_by(reservation_user_id=id)
     result = reservations_schema.dump(users_reservations)
@@ -385,6 +387,7 @@ def reserve():
 
 # Endpoint para realizar un pedido
 @app.route("/order", methods=["POST"])
+@jwt_required()
 def make_order():
     order = request.json["order"]
     user = request.json["user"]
@@ -400,6 +403,7 @@ def make_order():
 
 # Endpoint para obtener todos los pedidos
 @app.route("/orders", methods=["GET"])
+@jwt_required()
 def get_all_orders():
     all_items = Order.query.all()
     result = orders_schema.dump(all_items)
@@ -408,6 +412,7 @@ def get_all_orders():
 
 # Endpoint para obtener los pedidos de un usuario
 @app.route("/order/<id>", methods=["GET"])
+@jwt_required()
 def get_orders(id):
     users_orders = Order.query.filter_by(order_user_id=id)
     result = orders_schema.dump(users_orders)
